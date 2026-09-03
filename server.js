@@ -299,10 +299,12 @@ app.get("/complete", (req, res) => {
 
                 <head>
                     <meta charset="UTF-8">
+
                     <meta
                         name="viewport"
                         content="width=device-width, initial-scale=1.0"
                     >
+
                     <title>Không hợp lệ</title>
                 </head>
 
@@ -671,6 +673,13 @@ app.get("/api/check-key", (req, res) => {
             req.query.key || ""
         ).trim();
 
+    // Client ID ổn định của Roblox trên máy đang chạy script.
+    // Script sẽ gửi giá trị này để khóa key vào máy đầu tiên dùng key.
+    const hwid =
+        String(
+            req.query.hwid || ""
+        ).trim();
+
 
     if (!key) {
 
@@ -680,6 +689,18 @@ app.get("/api/check-key", (req, res) => {
 
             error:
                 "Thiếu key"
+
+        });
+    }
+
+    if (!hwid) {
+
+        return res.status(400).json({
+
+            valid: false,
+
+            error:
+                "Không lấy được mã máy"
 
         });
     }
@@ -713,6 +734,51 @@ app.get("/api/check-key", (req, res) => {
             valid: false,
 
             expired: true
+
+        });
+    }
+
+
+    // Lần đầu key được dùng:
+    // khóa key vào máy này.
+    if (!data.hwid) {
+
+        db.prepare(`
+            UPDATE keys
+            SET hwid = ?
+            WHERE id = ?
+        `).run(
+            hwid,
+            data.id
+        );
+
+        return res.json({
+
+            valid: true,
+
+            bound: true,
+
+            expiresAt:
+                data.expires_at
+
+        });
+    }
+
+
+    // Key đã khóa:
+    // chỉ đúng máy đã đăng ký mới được dùng.
+    if (
+        data.hwid !== hwid
+    ) {
+
+        return res.json({
+
+            valid: false,
+
+            bound: true,
+
+            error:
+                "Key đã được khóa cho máy khác."
 
         });
     }
