@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Nhận Key Roblox</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            background: #0f0f0f;
+            color: white;
+
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 420px;
+
+            padding: 30px;
+
+            background: #191919;
+            border-radius: 16px;
+
+            text-align: center;
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        p {
+            color: #aaa;
+        }
+
+        button {
+            width: 100%;
+
+            padding: 14px;
+            margin-top: 12px;
+
+            border: none;
+            border-radius: 8px;
+
+            background: white;
+            color: black;
+
+            font-size: 16px;
+            font-weight: bold;
+
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .key-box {
+            display: none;
+
+            margin-top: 20px;
+            padding: 15px;
+
+            background: #252525;
+            border-radius: 8px;
+
+            word-break: break-all;
+        }
+
+        .copy {
+            display: none;
+
+            background: #333;
+            color: white;
+        }
+
+        .status {
+            margin-top: 15px;
+            color: #aaa;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>Nhận Key Script alo1234vc</h1>
+
+    <p>
+        Nhấn nút bên dưới để nhận Key.
+    </p>
+
+    <button id="getKeyButton" onclick="getKey()">
+        NHẬN KEY
+    </button>
+
+    <div id="keyBox" class="key-box"></div>
+
+    <button
+        id="copyButton"
+        class="copy"
+        onclick="copyKey()">
+        SAO CHÉP KEY
+    </button>
+
+    <div id="status" class="status"></div>
+
+</div>
+
+<script>
+
+let currentKey = "";
+
+async function getKey() {
+
+    const button =
+        document.getElementById("getKeyButton");
+
+    const status =
+        document.getElementById("status");
+
+    try {
+
+        button.disabled = true;
+
+        button.innerText =
+            "ĐANG TẠO LINK...";
+
+        status.innerText = "";
+
+
+        const response =
+            await fetch("/api/start");
+
+
+        const data =
+            await response.json();
+
+
+        if (!data.success) {
+
+            throw new Error(
+                data.error ||
+                "Không thể tạo link."
+            );
+
+        }
+
+
+        status.innerText =
+            "Đang chuyển đến Link4M...";
+
+
+        window.location.href =
+            data.url;
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+        status.innerText =
+            error.message ||
+            "Không thể tạo link. Vui lòng thử lại.";
+
+
+        button.disabled = false;
+
+        button.innerText =
+            "NHẬN KEY";
+
+    }
+
+}
+
+
+async function copyKey() {
+
+    if (!currentKey) {
+        return;
+    }
+
+    try {
+
+        await navigator.clipboard
+            .writeText(currentKey);
+
+        document.getElementById("status")
+            .innerText = "Đã sao chép key.";
+
+    } catch {
+
+        document.getElementById("status")
+            .innerText =
+            "Không thể tự động sao chép. Hãy sao chép key thủ công.";
+    }
+}
+
+</script>
+
+</body>
+</html>
