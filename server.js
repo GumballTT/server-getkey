@@ -5,7 +5,7 @@ const crypto = require("crypto");
 const db = require("./database");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const LINK4M_API_KEY = process.env.LINK4M_API_KEY;
 
