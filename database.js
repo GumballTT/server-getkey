@@ -10,7 +10,8 @@ db.exec(`
         key TEXT UNIQUE NOT NULL,
         created_at INTEGER NOT NULL,
         expires_at INTEGER NOT NULL,
-        used INTEGER NOT NULL DEFAULT 0
+        used INTEGER NOT NULL DEFAULT 0,
+        hwid TEXT
     );
 
     CREATE TABLE IF NOT EXISTS sessions (
