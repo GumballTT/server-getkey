@@ -5,21 +5,23 @@ const crypto = require("crypto");
 const db = require("./database");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-const LINK4M_API_KEY = process.env.LINK4M_API_KEY;
+const PORT = process.env.PORT || 3000;
 
 const BASE_URL =
     process.env.BASE_URL ||
     `http://localhost:${PORT}`;
 
+const LINK4M_FIXED_URL =
+    process.env.LINK4M_FIXED_URL;
+
 app.use(express.json());
 app.use(express.static("public"));
 
 
-// ================================
+// =====================================================
 // GENERATE KEY
-// ================================
+// =====================================================
 
 function generateKey() {
     const random = crypto
@@ -31,15 +33,18 @@ function generateKey() {
 }
 
 
-// ================================
+// =====================================================
 // CREATE KEY
-// ================================
+// =====================================================
 
 function createKey(hours = 24) {
+
     let key;
 
     do {
+
         key = generateKey();
+
     } while (
         db.prepare(
             "SELECT id FROM keys WHERE key = ?"
@@ -73,26 +78,30 @@ function createKey(hours = 24) {
 }
 
 
-// ================================
+// =====================================================
 // SESSION TOKEN
-// ================================
+// =====================================================
 
 function generateSessionToken() {
+
     return crypto
         .randomBytes(32)
         .toString("hex");
 }
 
 
-// ================================
+// =====================================================
 // CREATE SESSION
-// ================================
+// =====================================================
 
 function createSession() {
+
     let token;
 
     do {
+
         token = generateSessionToken();
+
     } while (
         db.prepare(
             "SELECT id FROM sessions WHERE token = ?"
@@ -127,157 +136,122 @@ function createSession() {
 }
 
 
-// ================================
-// START
-// ================================
+// =====================================================
+// COOKIE HELPERS
+// =====================================================
 
-app.get("/api/start", async (req, res) => {
+function parseCookies(req) {
+
+    const header =
+        req.headers.cookie || "";
+
+    const cookies = {};
+
+    header
+        .split(";")
+        .forEach(part => {
+
+            const index =
+                part.indexOf("=");
+
+            if (index === -1) {
+                return;
+            }
+
+            const name =
+                part
+                    .slice(0, index)
+                    .trim();
+
+            const value =
+                part
+                    .slice(index + 1)
+                    .trim();
+
+            cookies[name] =
+                decodeURIComponent(value);
+        });
+
+    return cookies;
+}
+
+
+function setSessionCookie(res, token) {
+
+    const isProduction =
+        process.env.NODE_ENV === "production";
+
+    let cookie =
+        `key_session=${encodeURIComponent(token)}; ` +
+        `Path=/; ` +
+        `HttpOnly; ` +
+        `SameSite=Lax; ` +
+        `Max-Age=1800`;
+
+    if (isProduction) {
+        cookie += "; Secure";
+    }
+
+    res.setHeader(
+        "Set-Cookie",
+        cookie
+    );
+}
+
+
+// =====================================================
+// START
+// =====================================================
+
+app.get("/api/start", (req, res) => {
+
     try {
 
-        if (
-            !LINK4M_API_KEY ||
-            LINK4M_API_KEY === "YOUR_LINK4M_TOKEN"
-        ) {
+        if (!LINK4M_FIXED_URL) {
+
             return res.status(500).json({
                 success: false,
-                error: "Chưa cấu hình API token Link4M"
+                error:
+                    "Chưa cấu hình LINK4M_FIXED_URL trên Render."
             });
         }
 
 
-        const session = createSession();
+        // Tạo session mới.
+        // Mỗi lần bấm NHẬN KEY là một session mới.
+        const session =
+            createSession();
 
 
-        const destinationUrl =
-            `${BASE_URL}/complete/${session.token}`;
-
-
-        const apiUrl =
-            "https://link4m.co/api-shorten/v2" +
-            "?api=" +
-            encodeURIComponent(LINK4M_API_KEY) +
-            "&url=" +
-            encodeURIComponent(destinationUrl);
+        // Lưu session vào cookie của trình duyệt.
+        setSessionCookie(
+            res,
+            session.token
+        );
 
 
         console.log("---------------------------------");
-        console.log("Creating Link4M link...");
-        console.log("DESTINATION:", destinationUrl);
-
-
-        const response = await fetch(apiUrl, {
-            redirect: "manual"
-        });
-
-
-        const location =
-            response.headers.get("location");
-
 
         console.log(
-            "LINK4M STATUS:",
-            response.status
+            "New key session:",
+            session.token
         );
 
         console.log(
-            "LINK4M LOCATION:",
-            location
-        );
-
-
-        // ==========================================
-        // LINK4M REDIRECT
-        // ==========================================
-
-        if (
-            response.status >= 300 &&
-            response.status < 400 &&
-            location
-        ) {
-
-            console.log(
-                "Redirect detected."
-            );
-
-            console.log(
-                "Using redirect URL:",
-                location
-            );
-
-            console.log("---------------------------------");
-
-
-            return res.json({
-                success: true,
-                url: location
-            });
-        }
-
-
-        // ==========================================
-        // LINK4M JSON RESPONSE
-        // ==========================================
-
-        const responseText =
-            await response.text();
-
-
-        console.log(
-            "LINK4M RESPONSE:",
-            responseText
-        );
-
-
-        let data;
-
-        try {
-
-            data =
-                JSON.parse(responseText);
-
-        } catch (error) {
-
-            console.error(
-                "Link4M JSON error:",
-                error
-            );
-
-            return res.status(500).json({
-                success: false,
-                error:
-                    "Link4M không trả về JSON",
-                details:
-                    responseText
-            });
-        }
-
-
-        if (
-            data.status !== "success" ||
-            !data.shortenedUrl
-        ) {
-
-            return res.status(500).json({
-                success: false,
-                error:
-                    "Không thể tạo Link4M",
-                details:
-                    data
-            });
-        }
-
-
-        console.log(
-            "SHORTENED URL:",
-            data.shortenedUrl
+            "Link4M:",
+            LINK4M_FIXED_URL
         );
 
         console.log("---------------------------------");
 
 
         return res.json({
+
             success: true,
-            url: data.shortenedUrl
+
+            // Luôn dùng cùng một Link4M.
+            url: LINK4M_FIXED_URL
+
         });
 
     } catch (error) {
@@ -288,79 +262,204 @@ app.get("/api/start", async (req, res) => {
         );
 
         return res.status(500).json({
+
             success: false,
+
             error:
-                "Lỗi tạo link",
-            details:
-                error.message
+                "Không thể tạo session."
+
         });
     }
 });
 
 
-// ================================
+// =====================================================
 // COMPLETE
-// ================================
+// =====================================================
 
-app.get("/complete/:token", (req, res) => {
+app.get("/complete", (req, res) => {
 
-    const token =
-        String(
-            req.params.token || ""
-        ).trim();
+    try {
+
+        const cookies =
+            parseCookies(req);
+
+        const token =
+            String(
+                cookies.key_session || ""
+            ).trim();
 
 
-    const session =
+        if (!token) {
+
+            return res.status(403).send(`
+                <!DOCTYPE html>
+
+                <html lang="vi">
+
+                <head>
+                    <meta charset="UTF-8">
+                    <meta
+                        name="viewport"
+                        content="width=device-width, initial-scale=1.0"
+                    >
+                    <title>Không hợp lệ</title>
+                </head>
+
+                <body style="
+                    background:#111;
+                    color:white;
+                    font-family:Arial;
+                    text-align:center;
+                    padding:50px;
+                ">
+
+                    <h1>Liên kết không hợp lệ</h1>
+
+                    <p>
+                        Vui lòng quay lại trang nhận key
+                        và vượt Link4M trước.
+                    </p>
+
+                </body>
+
+                </html>
+            `);
+        }
+
+
+        const session =
+            db.prepare(`
+                SELECT *
+                FROM sessions
+                WHERE token = ?
+            `).get(token);
+
+
+        if (!session) {
+
+            return res.status(403).send(
+                "Session không hợp lệ."
+            );
+        }
+
+
+        // Session đã dùng rồi.
+        if (
+            session.completed === 1
+        ) {
+
+            return res.status(403).send(`
+                <!DOCTYPE html>
+
+                <html lang="vi">
+
+                <head>
+                    <meta charset="UTF-8">
+
+                    <meta
+                        name="viewport"
+                        content="width=device-width, initial-scale=1.0"
+                    >
+
+                    <title>Đã sử dụng</title>
+                </head>
+
+                <body style="
+                    background:#111;
+                    color:white;
+                    font-family:Arial;
+                    text-align:center;
+                    padding:50px;
+                ">
+
+                    <h1>Session đã được sử dụng</h1>
+
+                    <p>
+                        Muốn nhận key tiếp theo,
+                        bạn phải vượt Link4M lại.
+                    </p>
+
+                </body>
+
+                </html>
+            `);
+        }
+
+
+        // Session hết hạn.
+        if (
+            Date.now() >=
+            session.expires_at
+        ) {
+
+            return res.status(403).send(`
+                <!DOCTYPE html>
+
+                <html lang="vi">
+
+                <head>
+                    <meta charset="UTF-8">
+
+                    <meta
+                        name="viewport"
+                        content="width=device-width, initial-scale=1.0"
+                    >
+
+                    <title>Hết hạn</title>
+                </head>
+
+                <body style="
+                    background:#111;
+                    color:white;
+                    font-family:Arial;
+                    text-align:center;
+                    padding:50px;
+                ">
+
+                    <h1>Session đã hết hạn</h1>
+
+                    <p>
+                        Vui lòng quay lại và thử lại.
+                    </p>
+
+                </body>
+
+                </html>
+            `);
+        }
+
+
+        // Đánh dấu session đã hoàn thành.
+        // Session này chỉ được nhận đúng 1 key.
         db.prepare(`
-            SELECT *
-            FROM sessions
-            WHERE token = ?
-        `).get(token);
-
-
-    if (!session) {
-
-        return res.status(404).send(
-            "Liên kết không hợp lệ."
+            UPDATE sessions
+            SET completed = 1
+            WHERE id = ?
+        `).run(
+            session.id
         );
-    }
 
 
-    if (
-        session.completed === 1
-    ) {
+        // Tạo key mới.
+        const result =
+            createKey(24);
 
-        return res.status(403).send(
-            "Liên kết này đã được sử dụng."
+
+        // Xóa cookie session hiện tại.
+        res.setHeader(
+            "Set-Cookie",
+            "key_session=; Path=/; HttpOnly; Max-Age=0"
         );
-    }
 
 
-    if (
-        Date.now() >=
-        session.expires_at
-    ) {
-
-        return res.status(403).send(
-            "Liên kết này đã hết hạn."
+        console.log(
+            "KEY CREATED:",
+            result.key
         );
-    }
 
 
-    db.prepare(`
-        UPDATE sessions
-        SET completed = 1
-        WHERE id = ?
-    `).run(
-        session.id
-    );
-
-
-    const result =
-        createKey(24);
-
-
-    res.send(`
+        return res.send(`
 
 <!DOCTYPE html>
 
@@ -378,6 +477,10 @@ app.get("/complete/:token", (req, res) => {
 <title>Nhận Key</title>
 
 <style>
+
+* {
+    box-sizing: border-box;
+}
 
 body {
 
@@ -405,6 +508,7 @@ body {
 
     margin:
         0;
+
 }
 
 .box {
@@ -426,6 +530,7 @@ body {
 
     text-align:
         center;
+
 }
 
 .key {
@@ -444,6 +549,10 @@ body {
 
     word-break:
         break-all;
+
+    font-weight:
+        bold;
+
 }
 
 button {
@@ -459,6 +568,16 @@ button {
 
     cursor:
         pointer;
+
+    border:
+        none;
+
+    border-radius:
+        8px;
+
+    font-weight:
+        bold;
+
 }
 
 </style>
@@ -501,11 +620,22 @@ function copyKey() {
             .trim();
 
     navigator.clipboard
-        .writeText(key);
+        .writeText(key)
+        .then(() => {
 
-    alert(
-        "Đã sao chép key!"
-    );
+            alert(
+                "Đã sao chép key!"
+            );
+
+        })
+        .catch(() => {
+
+            alert(
+                "Không thể tự động sao chép."
+            );
+
+        });
+
 }
 
 </script>
@@ -514,13 +644,25 @@ function copyKey() {
 
 </html>
 
-    `);
+        `);
+
+    } catch (error) {
+
+        console.error(
+            "COMPLETE ERROR:",
+            error
+        );
+
+        return res.status(500).send(
+            "Có lỗi xảy ra khi cấp key."
+        );
+    }
 });
 
 
-// ================================
+// =====================================================
 // CHECK KEY
-// ================================
+// =====================================================
 
 app.get("/api/check-key", (req, res) => {
 
@@ -533,8 +675,12 @@ app.get("/api/check-key", (req, res) => {
     if (!key) {
 
         return res.status(400).json({
+
             valid: false,
-            error: "Thiếu key"
+
+            error:
+                "Thiếu key"
+
         });
     }
 
@@ -550,7 +696,9 @@ app.get("/api/check-key", (req, res) => {
     if (!data) {
 
         return res.json({
+
             valid: false
+
         });
     }
 
@@ -561,24 +709,30 @@ app.get("/api/check-key", (req, res) => {
     ) {
 
         return res.json({
+
             valid: false,
+
             expired: true
+
         });
     }
 
 
     return res.json({
+
         valid: true,
+
         expiresAt:
             data.expires_at
+
     });
 
 });
 
 
-// ================================
+// =====================================================
 // SERVER
-// ================================
+// =====================================================
 
 app.listen(
     PORT,
@@ -597,7 +751,7 @@ app.listen(
         );
 
         console.log(
-            `Website: http://localhost:${PORT}`
+            `Website: ${BASE_URL}`
         );
 
     }
